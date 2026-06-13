@@ -63,13 +63,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     async function confirmCheckout() {
       for (let attempt = 0; attempt < 12; attempt += 1) {
         try {
-          if (checkoutSessionId) {
-            const confirmation = await confirmCheckoutSession(checkoutSessionId)
-            if (confirmation.active) {
-              await access.refreshSubscription()
-              if (!cancelled) setCheckoutState('idle')
-              return
-            }
+          const confirmation = await confirmCheckoutSession(checkoutSessionId)
+          if (confirmation.active) {
+            await access.refreshSubscription()
+            if (!cancelled) setCheckoutState('idle')
+            return
           }
 
           const active = await access.refreshSubscription()
@@ -102,6 +100,16 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     setRouteChecking(true)
 
     access.refreshSubscription()
+      .then(async (active) => {
+        if (!active && !['active', 'trialing'].includes(access.subscriptionStatus)) {
+          try {
+            const confirmation = await confirmCheckoutSession(null)
+            if (confirmation.active) await access.refreshSubscription()
+          } catch {
+            // If there is no Stripe subscription to repair, the normal redirect rules apply.
+          }
+        }
+      })
       .finally(() => {
         if (!cancelled) setRouteChecking(false)
       })

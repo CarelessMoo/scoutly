@@ -61,7 +61,7 @@ export async function getFoundingStatus() {
   return response.json() as Promise<{ claimed: number; max: number; remaining: number; soldOut: boolean }>
 }
 
-export async function confirmCheckoutSession(sessionId: string) {
+export async function confirmCheckoutSession(sessionId?: string | null) {
   const token = await getAuthToken()
   const response = await fetch(`${functionsBaseUrl}/confirm-checkout-session`, {
     method: 'POST',
