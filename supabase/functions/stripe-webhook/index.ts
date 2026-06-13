@@ -57,7 +57,7 @@ async function saveSubscription(args: {
   const priceId = args.fallbackPriceId ?? firstItem?.price?.id ?? null
   const metadata = { ...(subscription.metadata ?? {}), ...(args.metadata ?? {}) }
   const userId = args.fallbackUserId ?? metadata.user_id
-  const incomingPlan = normalizePlan(metadata.plan) ?? normalizePlan(args.fallbackPlan) ?? planFromPriceId(priceId) ?? 'starter'
+  const incomingPlan = planFromPriceId(priceId) ?? normalizePlan(metadata.plan) ?? normalizePlan(args.fallbackPlan) ?? 'starter'
 
   console.log('User ID found in metadata', { user_id: userId ?? null, subscription_id: subscription.id })
   if (!userId) throw new Error(`Missing user_id metadata for subscription ${subscription.id}`)

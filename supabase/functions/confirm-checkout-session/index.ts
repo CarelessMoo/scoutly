@@ -9,6 +9,13 @@ const planConfig = {
   agency: { name: 'Agency', credits: 10000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
 } as const
 
+const priceEnvByPlan = {
+  founding: 'STRIPE_FOUNDING_PRICE_ID',
+  starter: 'STRIPE_STARTER_PRICE_ID',
+  pro: 'STRIPE_PRO_PRICE_ID',
+  agency: 'STRIPE_AGENCY_PRICE_ID',
+} as const
+
 function requiredSecret(name: string) {
   const value = Deno.env.get(name)?.trim()
   if (!value) throw new Error(`${name} is not configured`)
@@ -24,6 +31,14 @@ function timestampToIso(value?: number | null) {
   return value ? new Date(value * 1000).toISOString() : null
 }
 
+function planFromPriceId(priceId?: string | null) {
+  if (!priceId) return null
+  for (const [plan, envName] of Object.entries(priceEnvByPlan)) {
+    if (Deno.env.get(envName)?.trim() === priceId) return plan as keyof typeof planConfig
+  }
+  return null
+}
+
 async function saveSubscriptionForUser(args: {
   userId: string
   subscription: Stripe.Subscription
@@ -34,7 +49,8 @@ async function saveSubscriptionForUser(args: {
     current_period_start?: number
     current_period_end?: number
   }
-  const incomingPlan = normalizePlan(args.session?.metadata?.plan) ?? normalizePlan(subscription.metadata?.plan) ?? 'starter'
+  const priceId = args.session?.metadata?.price_id ?? subscription.items.data[0]?.price?.id ?? null
+  const incomingPlan = planFromPriceId(priceId) ?? normalizePlan(args.session?.metadata?.plan) ?? normalizePlan(subscription.metadata?.plan) ?? 'starter'
   const supabase = serviceClient()
 
   const { data: existingSubscription } = await supabase
@@ -54,7 +70,6 @@ async function saveSubscriptionForUser(args: {
   const status = args.forceStatus ?? subscription.status
   const isPaid = status === 'active' || status === 'trialing'
   const allocatedCredits = isPaid ? config.credits : 0
-  const priceId = args.session?.metadata?.price_id ?? subscription.items.data[0]?.price?.id ?? null
   const periodEnd = timestampToIso(subscription.current_period_end)
   const periodChanged = Boolean(periodEnd && existingSubscription?.current_period_end !== periodEnd)
   const wasInactive = !existingSubscription || !['active', 'trialing'].includes(existingSubscription.status ?? '')

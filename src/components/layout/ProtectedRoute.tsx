@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '../ui/card'
 import { Skeleton } from '../ui/skeleton'
-import { confirmCheckoutSession } from '../../lib/api'
+import { confirmCheckoutSession, syncSubscription } from '../../lib/api'
 import { useSubscriptionAccess } from '../../hooks/useSubscriptionAccess'
 
 function AppLoadingScreen({ title = 'Loading Scoutly', description = 'Checking your account access.' }: { title?: string; description?: string }) {
@@ -22,13 +22,14 @@ function AppLoadingScreen({ title = 'Loading Scoutly', description = 'Checking y
   )
 }
 
-function CheckoutSyncTimeout() {
+function CheckoutSyncTimeout({ detail }: { detail?: string }) {
   return (
     <div className="grid min-h-screen place-items-center bg-slate-950 px-4 text-slate-100">
       <Card className="page-enter w-full max-w-md text-center">
         <CardContent>
           <h1 className="text-xl font-semibold text-white">Your payment was received, but we are still syncing your subscription.</h1>
           <p className="mt-2 text-sm text-slate-400">Please refresh in a moment or contact support.</p>
+          {detail && <p className="mt-4 rounded-lg border border-white/10 bg-white/[0.04] p-3 text-xs text-slate-400">{detail}</p>}
         </CardContent>
       </Card>
     </div>
@@ -44,6 +45,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const [checkoutState, setCheckoutState] = useState<'idle' | 'confirming' | 'timed-out'>(
     isReturningFromCheckout ? 'confirming' : 'idle',
   )
+  const [checkoutError, setCheckoutError] = useState('')
   const [routeChecking, setRouteChecking] = useState(false)
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
     let cancelled = false
     setCheckoutState('confirming')
+    setCheckoutError('')
 
     async function confirmCheckout() {
       for (let attempt = 0; attempt < 12; attempt += 1) {
@@ -75,8 +78,15 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
             if (!cancelled) setCheckoutState('idle')
             return
           }
-        } catch {
-          // Keep polling. The webhook or confirmation endpoint may still be catching up.
+          const synced = await syncSubscription()
+          if (synced.active) {
+            await access.refreshSubscription()
+            if (!cancelled) setCheckoutState('idle')
+            return
+          }
+          if (synced.reason && !cancelled) setCheckoutError(synced.reason)
+        } catch (error) {
+          if (!cancelled && error instanceof Error) setCheckoutError(error.message)
         }
 
         await new Promise((resolve) => window.setTimeout(resolve, 2500))
@@ -103,8 +113,8 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       .then(async (active) => {
         if (!active && !['active', 'trialing'].includes(access.subscriptionStatus)) {
           try {
-            const confirmation = await confirmCheckoutSession(null)
-            if (confirmation.active) await access.refreshSubscription()
+            const synced = await syncSubscription()
+            if (synced.active) await access.refreshSubscription()
           } catch {
             // If there is no Stripe subscription to repair, the normal redirect rules apply.
           }
@@ -158,7 +168,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (isReturningFromCheckout && checkoutState === 'timed-out' && !access.isSubscribed) {
-    return <CheckoutSyncTimeout />
+    return <CheckoutSyncTimeout detail={checkoutError} />
   }
 
   if (routeChecking) {

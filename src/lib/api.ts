@@ -77,3 +77,19 @@ export async function confirmCheckoutSession(sessionId?: string | null) {
   }
   return response.json() as Promise<{ active: boolean }>
 }
+
+export async function syncSubscription() {
+  const token = await getAuthToken()
+  const response = await fetch(`${functionsBaseUrl}/sync-subscription`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.error ?? data?.reason ?? 'Unable to sync subscription.')
+  }
+  return data as { active: boolean; reason?: string; status?: string; plan?: string }
+}
