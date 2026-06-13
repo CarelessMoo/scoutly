@@ -28,6 +28,7 @@ async function saveSubscriptionForUser(args: {
   userId: string
   subscription: Stripe.Subscription
   session?: Stripe.Checkout.Session | null
+  forceStatus?: string | null
 }) {
   const subscription = args.subscription as Stripe.Subscription & {
     current_period_start?: number
@@ -50,7 +51,8 @@ async function saveSubscriptionForUser(args: {
 
   const plan = existingSubscription?.plan === 'founding' ? 'founding' : incomingPlan
   const config = planConfig[plan]
-  const isPaid = subscription.status === 'active' || subscription.status === 'trialing'
+  const status = args.forceStatus ?? subscription.status
+  const isPaid = status === 'active' || status === 'trialing'
   const allocatedCredits = isPaid ? config.credits : 0
   const priceId = args.session?.metadata?.price_id ?? subscription.items.data[0]?.price?.id ?? null
   const periodEnd = timestampToIso(subscription.current_period_end)
@@ -67,7 +69,7 @@ async function saveSubscriptionForUser(args: {
     plan,
     plan_name: config.name,
     price_id: priceId,
-    status: subscription.status,
+    status,
     monthly_lead_credits: allocatedCredits,
     credits_allocated: allocatedCredits,
     credits_remaining: isPaid ? remainingCredits : 0,
@@ -89,7 +91,7 @@ async function saveSubscriptionForUser(args: {
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 
-  console.log('Subscription updated in Supabase', { user_id: args.userId, subscription_id: subscription.id, plan_name: config.name, status: subscription.status })
+  console.log('Subscription updated in Supabase', { user_id: args.userId, subscription_id: subscription.id, plan_name: config.name, status })
   return isPaid
 }
 
@@ -117,29 +119,34 @@ Deno.serve(async (req) => {
 
   try {
     const stripe = new Stripe(requiredSecret('STRIPE_SECRET_KEY'), { apiVersion: '2025-10-29.clover' })
-    const user = await getUser(req)
     const { sessionId } = await req.json()
     let session: Stripe.Checkout.Session | null = null
     let subscription: Stripe.Subscription | null = null
+    let userId: string | null = null
+    let forceStatus: string | null = null
 
     if (sessionId) {
       session = await stripe.checkout.sessions.retrieve(sessionId)
-      console.log('Subscription status checked on checkout return', { user_id: user.id, session_id: session.id })
+      userId = session.metadata?.user_id ?? null
+      console.log('Subscription status checked on checkout return', { user_id: userId, session_id: session.id, payment_status: session.payment_status })
 
-      if (session.metadata?.user_id !== user.id) throw new Error('Checkout session does not belong to this user')
+      if (!userId) throw new Error('Checkout session is missing user metadata')
       if (session.payment_status === 'paid' && session.subscription) {
         subscription = await stripe.subscriptions.retrieve(String(session.subscription))
+        forceStatus = subscription.status === 'trialing' ? 'trialing' : 'active'
       }
     }
 
     if (!subscription) {
+      const user = await getUser(req)
+      userId = user.id
       subscription = await findLatestSubscriptionForUser(stripe, user.id)
       console.log('Subscription fallback lookup by Stripe customer', { user_id: user.id, subscription_found: Boolean(subscription) })
     }
 
     if (!subscription) return Response.json({ active: false }, { headers: corsHeaders })
 
-    const active = await saveSubscriptionForUser({ userId: user.id, subscription, session })
+    const active = await saveSubscriptionForUser({ userId: userId!, subscription, session, forceStatus })
     return Response.json({ active }, { headers: corsHeaders })
   } catch (error) {
     console.error('Checkout confirmation failed', { message: error instanceof Error ? error.message : 'Checkout confirmation failed' })
