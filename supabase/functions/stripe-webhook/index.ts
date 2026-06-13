@@ -2,66 +2,159 @@ import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno'
 import { serviceClient } from '../_shared/supabase.ts'
 
 const planConfig = {
-  founding: { credits: 2000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
-  starter: { credits: 1000, dailySearchLimit: 25, monthlySearchLimit: 250 },
-  pro: { credits: 3000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
-  agency: { credits: 10000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
+  founding: { name: 'Founding Member', credits: 2000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
+  starter: { name: 'Starter', credits: 1000, dailySearchLimit: 25, monthlySearchLimit: 250 },
+  pro: { name: 'Pro', credits: 3000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
+  agency: { name: 'Agency', credits: 10000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
 } as const
 
+const priceEnvByPlan = {
+  founding: 'STRIPE_FOUNDING_PRICE_ID',
+  starter: 'STRIPE_STARTER_PRICE_ID',
+  pro: 'STRIPE_PRO_PRICE_ID',
+  agency: 'STRIPE_AGENCY_PRICE_ID',
+} as const
+
+function requiredSecret(name: string) {
+  const value = Deno.env.get(name)?.trim()
+  if (!value) throw new Error(`${name} is not configured`)
+  return value
+}
+
+function planFromPriceId(priceId?: string | null) {
+  if (!priceId) return null
+  for (const [plan, envName] of Object.entries(priceEnvByPlan)) {
+    if (Deno.env.get(envName)?.trim() === priceId) return plan as keyof typeof planConfig
+  }
+  return null
+}
+
+function normalizePlan(value?: string | null) {
+  if (value && value in planConfig) return value as keyof typeof planConfig
+  return null
+}
+
+function timestampToIso(value?: number | null) {
+  return value ? new Date(value * 1000).toISOString() : null
+}
+
+async function saveSubscription(args: {
+  stripe: Stripe
+  subscription: Stripe.Subscription
+  metadata?: Stripe.Metadata | null
+  fallbackUserId?: string | null
+  fallbackPlan?: string | null
+  fallbackPriceId?: string | null
+  forceStatus?: string | null
+}) {
+  const supabase = serviceClient()
+  const subscription = args.subscription as Stripe.Subscription & {
+    current_period_start?: number
+    current_period_end?: number
+  }
+  const firstItem = subscription.items.data[0]
+  const priceId = args.fallbackPriceId ?? firstItem?.price?.id ?? null
+  const metadata = { ...(subscription.metadata ?? {}), ...(args.metadata ?? {}) }
+  const userId = args.fallbackUserId ?? metadata.user_id
+  const incomingPlan = normalizePlan(metadata.plan) ?? normalizePlan(args.fallbackPlan) ?? planFromPriceId(priceId) ?? 'starter'
+
+  console.log('User ID found in metadata', { user_id: userId ?? null, subscription_id: subscription.id })
+  if (!userId) throw new Error(`Missing user_id metadata for subscription ${subscription.id}`)
+
+  const { data: existingSubscription } = await supabase
+    .from('subscriptions')
+    .select('plan')
+    .or(`user_id.eq.${userId},stripe_subscription_id.eq.${subscription.id}`)
+    .maybeSingle()
+
+  const plan = existingSubscription?.plan === 'founding' ? 'founding' : incomingPlan
+  const config = planConfig[plan]
+  const status = args.forceStatus ?? subscription.status
+  const isPaid = status === 'active' || status === 'trialing'
+  const allocatedCredits = isPaid ? config.credits : 0
+  const periodEnd = timestampToIso(subscription.current_period_end)
+
+  const { data, error } = await supabase.from('subscriptions').upsert({
+    user_id: userId,
+    stripe_customer_id: String(subscription.customer),
+    stripe_subscription_id: subscription.id,
+    plan,
+    plan_name: config.name,
+    price_id: priceId,
+    status,
+    monthly_lead_credits: allocatedCredits,
+    credits_allocated: allocatedCredits,
+    credits_remaining: allocatedCredits,
+    daily_search_limit: config.dailySearchLimit,
+    monthly_search_limit: config.monthlySearchLimit,
+    current_period_start: timestampToIso(subscription.current_period_start),
+    current_period_end: periodEnd,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' }).select('id').single()
+
+  if (error) throw error
+
+  await supabase.from('usage_credits').upsert({
+    user_id: userId,
+    subscription_id: data?.id,
+    monthly_credits: allocatedCredits,
+    remaining_credits: allocatedCredits,
+    reset_at: periodEnd ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' })
+
+  console.log('Subscription updated in Supabase', { user_id: userId, subscription_id: subscription.id, plan_name: config.name, status })
+}
+
 Deno.serve(async (req) => {
-  const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2025-10-29.clover' })
+  const stripe = new Stripe(requiredSecret('STRIPE_SECRET_KEY'), { apiVersion: '2025-10-29.clover' })
   const signature = req.headers.get('stripe-signature')
   const body = await req.text()
 
   try {
-    const event = await stripe.webhooks.constructEventAsync(body, signature!, Deno.env.get('STRIPE_WEBHOOK_SECRET')!)
-    const supabase = serviceClient()
+    const event = await stripe.webhooks.constructEventAsync(body, signature!, requiredSecret('STRIPE_WEBHOOK_SECRET'))
+    console.log('Stripe webhook received', { event_type: event.type, event_id: event.id })
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session
+      if (!session.subscription) throw new Error('Completed checkout session is missing subscription')
+      const subscription = await stripe.subscriptions.retrieve(String(session.subscription))
+      await saveSubscription({
+        stripe,
+        subscription,
+        metadata: session.metadata,
+        fallbackUserId: session.metadata?.user_id,
+        fallbackPlan: session.metadata?.plan,
+        fallbackPriceId: session.metadata?.price_id,
+        forceStatus: 'active',
+      })
+    }
 
     if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated') {
-      const subscription = event.data.object as Stripe.Subscription
-      const userId = subscription.metadata.user_id
-      const incomingPlan = (subscription.metadata.plan || 'starter') as keyof typeof planConfig
-      const { data: existingSubscription } = await supabase
-        .from('subscriptions')
-        .select('plan')
-        .eq('user_id', userId)
-        .maybeSingle()
-
-      const plan = existingSubscription?.plan === 'founding' ? 'founding' : incomingPlan
-      const config = planConfig[plan]
-
-      const { data } = await supabase.from('subscriptions').upsert({
-        user_id: userId,
-        stripe_customer_id: String(subscription.customer),
-        stripe_subscription_id: subscription.id,
-        plan,
-        status: subscription.status,
-        monthly_lead_credits: config.credits,
-        daily_search_limit: config.dailySearchLimit,
-        monthly_search_limit: config.monthlySearchLimit,
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-      }, { onConflict: 'user_id' }).select('id').single()
-
-      await supabase.from('usage_credits').upsert({
-        user_id: userId,
-        subscription_id: data?.id,
-        monthly_credits: config.credits,
-        remaining_credits: config.credits,
-        reset_at: new Date(subscription.current_period_end * 1000).toISOString(),
-      }, { onConflict: 'user_id' })
+      await saveSubscription({ stripe, subscription: event.data.object as Stripe.Subscription })
     }
 
     if (event.type === 'customer.subscription.deleted') {
-      const subscription = event.data.object as Stripe.Subscription
-      await supabase
-        .from('subscriptions')
-        .update({ status: 'canceled' })
-        .eq('stripe_subscription_id', subscription.id)
+      await saveSubscription({ stripe, subscription: event.data.object as Stripe.Subscription, forceStatus: 'canceled' })
+    }
+
+    if (event.type === 'invoice.payment_succeeded' || event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }
+      if (invoice.subscription) {
+        const subscription = typeof invoice.subscription === 'string'
+          ? await stripe.subscriptions.retrieve(invoice.subscription)
+          : invoice.subscription
+        await saveSubscription({
+          stripe,
+          subscription,
+          forceStatus: event.type === 'invoice.payment_failed' ? 'past_due' : null,
+        })
+      }
     }
 
     return Response.json({ received: true })
   } catch (error) {
+    console.error('Stripe webhook failed', { message: error instanceof Error ? error.message : 'Webhook failed' })
     return Response.json({ error: error instanceof Error ? error.message : 'Webhook failed' }, { status: 400 })
   }
 })

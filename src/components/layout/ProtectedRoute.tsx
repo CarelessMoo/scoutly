@@ -1,21 +1,22 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { Skeleton } from '../ui/skeleton'
-import { useAuth } from '../../providers/AuthProvider'
 import { Card, CardContent } from '../ui/card'
 import { confirmCheckoutSession } from '../../lib/api'
+import { useSubscriptionAccess } from '../../hooks/useSubscriptionAccess'
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { loading, user, isSubscribed, onboardingCompleted, refreshSubscription } = useAuth()
   const location = useLocation()
+  const access = useSubscriptionAccess(location.pathname)
   const [checkoutPolling, setCheckoutPolling] = useState(false)
   const [checkoutTimedOut, setCheckoutTimedOut] = useState(false)
+  const [routeChecking, setRouteChecking] = useState(false)
   const params = new URLSearchParams(location.search)
   const isReturningFromCheckout = params.get('checkout') === 'success'
   const checkoutSessionId = params.get('session_id')
 
   useEffect(() => {
-    if (!user || !isReturningFromCheckout || isSubscribed) return
+    if (!access.user || !isReturningFromCheckout || access.isSubscribed) return
 
     let cancelled = false
     setCheckoutPolling(true)
@@ -26,7 +27,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         try {
           const confirmation = await confirmCheckoutSession(checkoutSessionId)
           if (confirmation.active) {
-            await refreshSubscription()
+            await access.refreshSubscription()
             setCheckoutPolling(false)
             return
           }
@@ -36,7 +37,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       }
 
       for (let attempt = 0; attempt < 12; attempt += 1) {
-        const active = await refreshSubscription()
+        const active = await access.refreshSubscription()
         if (cancelled || active) {
           setCheckoutPolling(false)
           return
@@ -55,9 +56,46 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [checkoutSessionId, isReturningFromCheckout, isSubscribed, refreshSubscription, user])
+  }, [access, checkoutSessionId, isReturningFromCheckout])
 
-  if (loading) {
+  useEffect(() => {
+    if (access.loading || !access.user || isReturningFromCheckout) return
+
+    let cancelled = false
+    setRouteChecking(true)
+
+    access.refreshSubscription()
+      .then((active) => {
+        if (import.meta.env.DEV) {
+          console.info('[Scoutly auth] Route access check', {
+            userId: access.user?.id,
+            route: location.pathname,
+            subscriptionStatus: active ? 'active' : access.subscriptionStatus,
+            decision: active || location.pathname === '/app/billing' ? 'allow' : 'pricing',
+          })
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setRouteChecking(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [access.loading, access.user?.id, isReturningFromCheckout, location.pathname])
+
+  useEffect(() => {
+    if (import.meta.env.DEV && !access.loading && !access.subscriptionLoading && !routeChecking) {
+      console.info('[Scoutly auth] Redirect decision made', {
+        userId: access.user?.id ?? null,
+        route: location.pathname,
+        subscriptionStatus: access.subscriptionStatus,
+        decision: access.decision,
+      })
+    }
+  }, [access.decision, access.loading, access.subscriptionLoading, access.user?.id, access.subscriptionStatus, location.pathname, routeChecking])
+
+  if (access.loading || access.subscriptionLoading || routeChecking || access.decision === 'loading') {
     return (
       <div className="min-h-screen bg-slate-950 p-6">
         <Skeleton className="h-16 w-full" />
@@ -66,22 +104,22 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     )
   }
 
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
-  if (!isSubscribed && isReturningFromCheckout && (checkoutPolling || !checkoutTimedOut)) {
+  if (!access.user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (!access.isSubscribed && isReturningFromCheckout && (checkoutPolling || !checkoutTimedOut)) {
     return (
       <div className="grid min-h-screen place-items-center bg-slate-950 px-4 text-slate-100">
         <Card className="page-enter w-full max-w-md text-center">
           <CardContent>
             <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-cyan-300 border-t-transparent" />
-            <h1 className="text-xl font-semibold text-white">Activating your subscription</h1>
-            <p className="mt-2 text-sm text-slate-400">Stripe is confirming your payment. This usually takes a few seconds.</p>
+            <h1 className="text-xl font-semibold text-white">Confirming your subscription...</h1>
+            <p className="mt-2 text-sm text-slate-400">Stripe is confirming your payment and Scoutly is refreshing your account access.</p>
           </CardContent>
         </Card>
       </div>
     )
   }
-  if (!isSubscribed && location.pathname !== '/app') return <Navigate to="/pricing?notice=subscription-required" replace />
-  if (isSubscribed && !onboardingCompleted && location.pathname !== '/app/onboarding') return <Navigate to="/app/onboarding" replace />
+  if (access.decision === 'pricing') return <Navigate to="/pricing?notice=subscription-required" replace />
+  if (access.decision === 'onboarding') return <Navigate to="/app/onboarding" replace />
 
   return children
 }
