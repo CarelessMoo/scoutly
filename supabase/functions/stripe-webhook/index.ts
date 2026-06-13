@@ -74,7 +74,7 @@ async function saveSubscription(args: {
     .eq('user_id', userId)
     .maybeSingle()
 
-  const plan = existingSubscription?.plan === 'founding' ? 'founding' : incomingPlan
+  const plan = incomingPlan
   const config = planConfig[plan]
   const status = args.forceStatus ?? subscription.status
   const isPaid = status === 'active' || status === 'trialing'
