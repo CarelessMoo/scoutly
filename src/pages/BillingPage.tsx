@@ -59,7 +59,7 @@ export function BillingPage() {
           <CardHeader><h2 className="font-semibold text-white">Access rules</h2></CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-400">
             <p>Users must have an active paid Stripe subscription before they can access Scoutly.</p>
-            <p>Search requests are validated server-side and blocked when credits reach zero.</p>
+            <p>Searches are free. Credits are only deducted when new leads are unlocked.</p>
             <p>Credits reset monthly based on the plan stored from Stripe webhook events.</p>
             <div className="flex flex-wrap gap-4 pt-2 text-cyan-200">
               <Link to="/terms">Terms</Link>

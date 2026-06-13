@@ -36,7 +36,7 @@ export function CreditHistoryPage() {
             <AlertTriangle className="mt-1 h-5 w-5 text-cyan-200" />
             <div>
               <h2 className="font-semibold text-white">Cost protection</h2>
-              <p className="mt-1 text-sm text-slate-400">Searches stop automatically when daily or monthly plan limits are reached. Duplicate leads are returned but not charged again.</p>
+              <p className="mt-1 text-sm text-slate-400">Searches are free. Credits are only deducted when new leads are unlocked, and previously unlocked duplicate leads never cost credits again.</p>
             </div>
           </div>
         </CardHeader>

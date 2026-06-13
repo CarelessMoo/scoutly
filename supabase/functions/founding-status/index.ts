@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
       .from('subscriptions')
       .select('id', { count: 'exact', head: true })
       .eq('plan', 'founding')
-      .in('status', ['active', 'trialing', 'incomplete'])
+      .in('status', ['active', 'trialing'])
 
     if (error) throw error
 

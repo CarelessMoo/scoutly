@@ -41,10 +41,6 @@ export function LeadSearchPage() {
 
   function runSearch(event: FormEvent) {
     event.preventDefault()
-    if (remainingCredits <= 0) {
-      toast({ title: 'No lead credits remaining', description: 'Credits reset monthly based on your active subscription plan.' })
-      return
-    }
     if (searchesToday >= activePlan.dailySearchLimit) {
       toast({ title: 'Daily search limit reached', description: `Your ${activePlan.name} plan allows ${activePlan.dailySearchLimit} searches per day.` })
       return
@@ -54,7 +50,7 @@ export function LeadSearchPage() {
       return
     }
     setSearched(true)
-    toast({ title: 'Search complete', description: `${filteredLeads.length} leads displayed. Each displayed lead costs 1 credit.` })
+    toast({ title: 'Search complete', description: `${filteredLeads.length} leads found. Searches are free; credits are only used when new leads are unlocked.` })
   }
 
   function saveLead(lead: Lead) {
@@ -66,7 +62,7 @@ export function LeadSearchPage() {
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">Lead Search</p>
-          <h1 className="mt-2 text-3xl font-semibold text-white">Search local businesses with paid lead credits.</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-white">Search local businesses and unlock the leads you want.</h1>
           <p className="mt-2 text-sm text-slate-400">Production searches call the backend Google Places function so API keys never reach the browser.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -85,7 +81,7 @@ export function LeadSearchPage() {
             <Input placeholder="City" value={city} onChange={(event) => setCity(event.target.value)} />
             <Input placeholder="State" value={state} onChange={(event) => setState(event.target.value)} />
             <Input placeholder="Radius (mi)" type="number" defaultValue={25} min={1} max={50} />
-            <Button className="md:col-span-2 xl:col-span-6" disabled={remainingCredits <= 0}>
+            <Button className="md:col-span-2 xl:col-span-6">
               <Search className="h-4 w-4" />
               Run search
             </Button>
@@ -119,7 +115,7 @@ export function LeadSearchPage() {
       <Card>
         <CardHeader>
           <h2 className="font-semibold text-white">{searched ? `${filteredLeads.length} search results` : 'Demo search results'}</h2>
-          <p className="mt-1 text-sm text-slate-500">Duplicate leads already returned to your account are not charged again.</p>
+          <p className="mt-1 text-sm text-slate-500">Searches, summaries, saving leads, CSV exports, pipeline, and calendar usage are free. New unlocked leads cost 1 credit each.</p>
         </CardHeader>
         <CardContent className="p-0">
           <LeadTable leads={filteredLeads} onSave={saveLead} />

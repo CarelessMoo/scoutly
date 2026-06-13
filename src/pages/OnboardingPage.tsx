@@ -5,7 +5,7 @@ import { Card, CardContent } from '../components/ui/card'
 
 const steps = [
   { icon: Search, title: 'Run a focused search', copy: 'Choose an industry, keyword, city, state, and radius. Scoutly uses the official Google Places API from the backend.' },
-  { icon: Star, title: 'Understand credits', copy: 'Each new lead displayed costs 1 credit. Daily and monthly search limits protect your API spend.' },
+  { icon: Star, title: 'Understand credits', copy: 'Searches are free. Each newly unlocked lead costs 1 credit, and previously unlocked leads never cost credits again.' },
   { icon: Table2, title: 'Save qualified leads', copy: 'Save prospects, add notes and tags, schedule follow-ups, and move them through the pipeline.' },
   { icon: Download, title: 'Export clean CSVs', copy: 'Download search results, saved leads, or pipeline leads with consistent columns for outreach workflows.' },
 ]

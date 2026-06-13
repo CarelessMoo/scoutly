@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [plan, setPlan] = useState<PlanKey | null>('founding')
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('active')
-  const [remainingCredits, setRemainingCredits] = useState(2500)
+  const [remainingCredits, setRemainingCredits] = useState(2000)
 
   useEffect(() => {
     if (!supabase) {

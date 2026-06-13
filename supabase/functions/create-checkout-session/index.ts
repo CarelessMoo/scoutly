@@ -3,10 +3,10 @@ import { corsHeaders, corsResponse } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/supabase.ts'
 
 const planConfig = {
-  founding: { credits: 2500, dailySearchLimit: 75, monthlySearchLimit: 1000, maxSpots: 25 },
+  founding: { credits: 2000, dailySearchLimit: 75, monthlySearchLimit: 1000, maxSpots: 25 },
   starter: { credits: 1000, dailySearchLimit: 25, monthlySearchLimit: 250 },
-  pro: { credits: 5000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
-  agency: { credits: 15000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
+  pro: { credits: 3000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
+  agency: { credits: 10000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
 } as const
 const priceEnvByPlan = {
   founding: 'STRIPE_FOUNDING_PRICE_ID',
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
         .from('subscriptions')
         .select('id', { count: 'exact', head: true })
         .eq('plan', 'founding')
-        .in('status', ['active', 'trialing', 'incomplete'])
+        .in('status', ['active', 'trialing'])
 
       if (error) throw error
       if ((count ?? 0) >= planConfig.founding.maxSpots) throw new Error('Founding Member Plan Sold Out')

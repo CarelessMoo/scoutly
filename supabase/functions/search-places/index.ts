@@ -51,16 +51,6 @@ Deno.serve(async (req) => {
     const quotaCheck = await supabase.rpc('assert_search_allowed', { target_user_id: user.id })
     if (quotaCheck.error) throw quotaCheck.error
 
-    const { data: credits } = await supabase
-      .from('usage_credits')
-      .select('remaining_credits')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (!credits || credits.remaining_credits < 1) {
-      return Response.json({ error: 'No lead credits remaining' }, { status: 402, headers: corsHeaders })
-    }
-
     const textQuery = [payload.keyword, payload.businessType, payload.industry, payload.city, payload.state].filter(Boolean).join(' ')
     const googleResponse = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
@@ -71,7 +61,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         textQuery,
-        maxResultCount: Math.min(Number(credits.remaining_credits), 20),
+        maxResultCount: 20,
       }),
     })
 
@@ -103,23 +93,7 @@ Deno.serve(async (req) => {
       .in('fingerprint', fingerprints)
 
     const existingFingerprints = new Set((existingLeads ?? []).map((lead) => lead.fingerprint))
-    const newLeads = leads.filter((lead) => !existingFingerprints.has(fingerprint(lead)))
-    const duplicateCount = leads.length - newLeads.length
-
-    if (newLeads.length > 0) {
-      await supabase.rpc('consume_lead_credits', { target_user_id: user.id, credit_count: newLeads.length })
-      await supabase.from('returned_leads').upsert(
-        newLeads.map((lead) => ({
-          user_id: user.id,
-          place_id: lead.placeId,
-          fingerprint: fingerprint(lead),
-          business_name: lead.businessName,
-          phone_number: lead.phoneNumber,
-          address: lead.address,
-        })),
-        { onConflict: 'user_id,fingerprint' },
-      )
-    }
+    const duplicateCount = leads.filter((lead) => existingFingerprints.has(fingerprint(lead))).length
 
     await supabase.from('search_history').insert({
       user_id: user.id,
@@ -132,11 +106,11 @@ Deno.serve(async (req) => {
       filters: payload.filters ?? {},
       leads_returned: leads.length,
       result_count: leads.length,
-      credits_used: newLeads.length,
+      credits_used: 0,
       duplicate_count: duplicateCount,
     })
 
-    return Response.json({ leads, creditsUsed: newLeads.length, duplicateCount }, { headers: corsHeaders })
+    return Response.json({ leads, creditsUsed: 0, duplicateCount }, { headers: corsHeaders })
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Search failed' }, { status: 400, headers: corsHeaders })
   }

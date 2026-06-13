@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { MarketingNav } from '../components/marketing/MarketingNav'
 import { MarketingFooter } from '../components/marketing/MarketingFooter'
@@ -9,9 +9,12 @@ import { getFoundingRemainingSpots, plans } from '../lib/plans'
 import type { PlanKey } from '../lib/types'
 import { createCheckoutSession, getFoundingStatus } from '../lib/api'
 import { useToast } from '../providers/ToastProvider'
+import { useAuth } from '../providers/AuthProvider'
 
 export function PricingPage() {
   const { toast } = useToast()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [foundingRemaining, setFoundingRemaining] = useState(getFoundingRemainingSpots())
 
   useEffect(() => {
@@ -22,17 +25,24 @@ export function PricingPage() {
 
   async function startCheckout(plan: PlanKey) {
     if (plan === 'founding' && foundingRemaining === 0) {
-      toast({ title: 'Founding Member Plan Sold Out', description: 'Once all 25 spots are claimed, this plan will never be available again.' })
+      toast({ title: 'Founding Member Plan Sold Out', description: 'Once all 25 spots are claimed, this offer will never return.' })
+      return
+    }
+
+    if (!user) {
+      window.localStorage.setItem('scoutly_pending_plan', plan)
+      toast({ title: 'Create your account first', description: 'After signup, Scoutly will send you to Stripe Checkout for this plan.' })
+      navigate('/signup')
       return
     }
 
     try {
       const { url } = await createCheckoutSession(plan)
       window.location.href = url
-    } catch {
+    } catch (error) {
       toast({
-        title: 'Checkout is ready to connect',
-        description: 'Add Supabase and Stripe environment variables, then this button opens Stripe Checkout.',
+        title: 'Checkout could not start',
+        description: error instanceof Error ? error.message : 'Check Supabase Function Secrets and Stripe price IDs.',
       })
     }
   }
@@ -45,7 +55,7 @@ export function PricingPage() {
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">No free plan</p>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">Choose the lead engine that fits your outreach volume.</h1>
           <p className="mt-4 text-slate-400">Become one of Scoutly's first 25 Founding Members and lock in lifetime pricing forever.</p>
-          <p className="mt-2 text-sm text-slate-500">Once all 25 spots are claimed, this plan will never be available again.</p>
+          <p className="mt-2 text-sm text-slate-500">Pay just $19/month for life and receive 2,000 monthly lead credits. Once all 25 spots are claimed, this offer will never return.</p>
         </div>
         <div className="mt-10 grid gap-5 lg:grid-cols-4">
           {(Object.keys(plans) as PlanKey[]).map((key) => {

@@ -19,7 +19,10 @@ export async function createCheckoutSession(plan: PlanKey) {
     },
     body: JSON.stringify({ plan }),
   })
-  if (!response.ok) throw new Error('Unable to start checkout.')
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.error ?? 'Unable to start checkout.')
+  }
   return response.json() as Promise<{ url: string }>
 }
 

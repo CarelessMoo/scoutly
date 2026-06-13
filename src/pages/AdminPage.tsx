@@ -1,15 +1,11 @@
 import { Navigate } from 'react-router-dom'
-import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
-import { demoLeads, searchHistory } from '../lib/mockData'
+import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { useAuth } from '../providers/AuthProvider'
 
 export function AdminPage() {
   const { isAdmin } = useAuth()
   if (!isAdmin) return <Navigate to="/app" replace />
-
-  const totalSearches = searchHistory.length
-  const totalCredits = searchHistory.reduce((sum, item) => sum + item.creditsUsed, 0)
 
   return (
     <div className="space-y-6">
@@ -19,25 +15,24 @@ export function AdminPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Total users" value="128" />
-        <Metric label="Active subscriptions" value="94" />
-        <Metric label="Total searches" value={totalSearches.toString()} />
-        <Metric label="Credits used" value={totalCredits.toString()} />
-        <Metric label="Estimated API usage" value={`${demoLeads.length * totalSearches} calls`} />
+        <Metric label="Total users" value="0" />
+        <Metric label="Active subscriptions" value="0" />
+        <Metric label="Total searches" value="0" />
+        <Metric label="Credits used" value="0" />
+        <Metric label="Estimated API usage" value="0 calls" />
       </div>
 
       <Card>
         <CardHeader><h2 className="font-semibold text-white">Recent signups</h2></CardHeader>
-        <CardContent className="space-y-3">
-          {['morgan@northstar.studio', 'alex@rankboost.io', 'admin@scoutly.app', 'taylor@localgrowth.co'].map((email, index) => (
-            <div key={email} className="flex items-center justify-between rounded-lg bg-white/[0.035] p-4">
-              <div>
-                <p className="font-medium text-white">{email}</p>
-                <p className="text-sm text-slate-500">Signed up {index + 1} day{index === 0 ? '' : 's'} ago</p>
-              </div>
-              <Badge>{index === 2 ? 'Admin' : 'Customer'}</Badge>
-            </div>
-          ))}
+        <CardContent>
+          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-6 text-sm text-slate-400">
+            No signups yet. New customers will appear here after launch.
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge>Paid users: 0</Badge>
+            <Badge>Revenue: $0</Badge>
+            <Badge>Leads unlocked: 0</Badge>
+          </div>
         </CardContent>
       </Card>
     </div>

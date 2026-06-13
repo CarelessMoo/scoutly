@@ -118,14 +118,6 @@ export const demoLeads: Lead[] = [
   },
 ]
 
-export const searchHistory: SearchHistoryItem[] = [
-  { id: 's1', keyword: 'dentists without websites', city: 'Chicago', state: 'IL', radius: 25, leadsReturned: 43, creditsUsed: 39, resultCount: 43, createdAt: '2026-06-10' },
-  { id: 's2', keyword: 'roofing contractors', city: 'Denver', state: 'CO', radius: 35, leadsReturned: 88, creditsUsed: 81, resultCount: 88, createdAt: '2026-06-09' },
-  { id: 's3', keyword: 'pet groomers', city: 'Seattle', state: 'WA', radius: 20, leadsReturned: 27, creditsUsed: 24, resultCount: 27, createdAt: '2026-06-08' },
-]
+export const searchHistory: SearchHistoryItem[] = []
 
-export const calendarEvents: CalendarEvent[] = [
-  { id: 'e1', leadId: 'lead_4', title: 'Call Harbor Pet Grooming', type: 'Call', startsAt: '2026-06-15T15:00:00' },
-  { id: 'e2', leadId: 'lead_3', title: 'Send proposal to Bright Path', type: 'Follow-up', startsAt: '2026-06-17T10:30:00' },
-  { id: 'e3', leadId: 'lead_1', title: 'Discovery meeting', type: 'Meeting', startsAt: '2026-06-18T13:00:00' },
-]
+export const calendarEvents: CalendarEvent[] = []

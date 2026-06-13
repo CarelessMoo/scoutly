@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { useAuth } from '../providers/AuthProvider'
 import { useToast } from '../providers/ToastProvider'
+import { createCheckoutSession } from '../lib/api'
+import type { PlanKey } from '../lib/types'
 
 export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const [email, setEmail] = useState('demo@scoutly.com')
@@ -21,6 +23,16 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     try {
       if (mode === 'login') await signIn(email, password)
       else await signUp(email, password)
+
+      const pendingPlan = window.localStorage.getItem('scoutly_pending_plan') as PlanKey | null
+      if (pendingPlan) {
+        window.localStorage.removeItem('scoutly_pending_plan')
+        toast({ title: 'Opening checkout', description: 'Sending you to Stripe to activate Scoutly.' })
+        const { url } = await createCheckoutSession(pendingPlan)
+        window.location.href = url
+        return
+      }
+
       navigate(mode === 'signup' ? '/app/onboarding' : '/app')
     } catch (error) {
       toast({ title: 'Authentication failed', description: error instanceof Error ? error.message : 'Please try again.' })

@@ -2,10 +2,10 @@ import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno'
 import { serviceClient } from '../_shared/supabase.ts'
 
 const planConfig = {
-  founding: { credits: 2500, dailySearchLimit: 75, monthlySearchLimit: 1000 },
+  founding: { credits: 2000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
   starter: { credits: 1000, dailySearchLimit: 25, monthlySearchLimit: 250 },
-  pro: { credits: 5000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
-  agency: { credits: 15000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
+  pro: { credits: 3000, dailySearchLimit: 75, monthlySearchLimit: 1000 },
+  agency: { credits: 10000, dailySearchLimit: 200, monthlySearchLimit: 3000 },
 } as const
 
 Deno.serve(async (req) => {

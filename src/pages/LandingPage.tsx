@@ -95,6 +95,7 @@ export function LandingPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-200">Pricing</p>
             <h2 className="mt-3 text-3xl font-semibold text-white">Lock in Scoutly while the first 25 spots are open.</h2>
             <p className="mt-3 text-slate-400">Become one of Scoutly's first 25 Founding Members and lock in lifetime pricing forever.</p>
+            <p className="mt-2 text-sm text-slate-500">Pay just $19/month for life and receive 2,000 monthly lead credits. Once all 25 spots are claimed, this offer will never return.</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-4">
             {(Object.keys(plans) as PlanKey[]).map((key) => {
