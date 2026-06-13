@@ -5,6 +5,10 @@ create table if not exists public.profiles (
   email text not null,
   full_name text,
   company text,
+  onboarding_completed boolean not null default false,
+  target_service text,
+  first_search_city text,
+  target_industry text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -157,8 +161,20 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email)
-  values (new.id, new.email);
+  insert into public.profiles (id, email, full_name)
+  values (new.id, new.email, new.raw_user_meta_data ->> 'full_name')
+  on conflict (id) do update
+  set email = excluded.email,
+      full_name = coalesce(excluded.full_name, public.profiles.full_name),
+      updated_at = now();
+
+  insert into public.subscriptions (user_id, plan, status, monthly_lead_credits, daily_search_limit, monthly_search_limit)
+  values (new.id, 'starter', 'inactive', 0, 25, 250)
+  on conflict (user_id) do nothing;
+
+  insert into public.usage_credits (user_id, monthly_credits, remaining_credits)
+  values (new.id, 0, 0)
+  on conflict (user_id) do nothing;
 
   insert into public.pipeline_statuses (user_id, name, sort_order)
   values
@@ -167,7 +183,8 @@ begin
     (new.id, 'Interested', 3),
     (new.id, 'Follow-up', 4),
     (new.id, 'Closed', 5),
-    (new.id, 'Not Interested', 6);
+    (new.id, 'Not Interested', 6)
+  on conflict (user_id, name) do nothing;
 
   return new;
 end;

@@ -47,7 +47,7 @@ export function LandingPage() {
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg">
-                  <Link to="/signup">Get Access <ArrowRight className="h-4 w-4" /></Link>
+                  <Link to="/signup">Get Started <ArrowRight className="h-4 w-4" /></Link>
                 </Button>
                 <Button asChild size="lg" variant="secondary">
                   <Link to="/pricing">View Pricing</Link>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { MarketingNav } from '../components/marketing/MarketingNav'
 import { MarketingFooter } from '../components/marketing/MarketingFooter'
@@ -13,8 +13,9 @@ import { useAuth } from '../providers/AuthProvider'
 
 export function PricingPage() {
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, isSubscribed } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [foundingRemaining, setFoundingRemaining] = useState(getFoundingRemainingSpots())
 
   useEffect(() => {
@@ -22,6 +23,8 @@ export function PricingPage() {
       .then((status) => setFoundingRemaining(status.remaining))
       .catch(() => setFoundingRemaining(getFoundingRemainingSpots()))
   }, [])
+
+  if (isSubscribed) return <Navigate to="/app" replace />
 
   async function startCheckout(plan: PlanKey) {
     if (plan === 'founding' && foundingRemaining === 0) {
@@ -57,6 +60,11 @@ export function PricingPage() {
           <p className="mt-4 text-slate-400">Become one of Scoutly's first 25 Founding Members and lock in lifetime pricing forever.</p>
           <p className="mt-2 text-sm text-slate-500">Pay just $19/month for life and receive 2,000 monthly lead credits. Once all 25 spots are claimed, this offer will never return.</p>
         </div>
+        {searchParams.get('notice') === 'subscription-required' && (
+          <div className="mx-auto mt-8 max-w-3xl rounded-lg border border-cyan-300/20 bg-cyan-300/10 p-4 text-center text-sm text-cyan-100">
+            An active Scoutly subscription is required to access this feature.
+          </div>
+        )}
         <div className="mt-10 grid gap-5 lg:grid-cols-4">
           {(Object.keys(plans) as PlanKey[]).map((key) => {
             const plan = plans[key]

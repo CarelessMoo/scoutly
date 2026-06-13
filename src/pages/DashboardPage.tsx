@@ -10,9 +10,10 @@ import { formatNumber } from '../lib/utils'
 import { useAuth } from '../providers/AuthProvider'
 
 export function DashboardPage() {
-  const { remainingCredits, plan, user } = useAuth()
+  const { remainingCredits, plan, user, isSubscribed } = useAuth()
   const creditsUsedThisMonth = 0
   const nextResetDate = 'Jul 12, 2026'
+  const searchLink = isSubscribed ? '/app/search' : '/pricing?notice=subscription-required'
 
   return (
     <div className="space-y-6">
@@ -27,9 +28,23 @@ export function DashboardPage() {
           {plan === 'founding' && <p className="mt-2 text-sm text-cyan-100">You have locked in lifetime Founding Member pricing.</p>}
         </div>
         <Button asChild>
-          <Link to="/app/search"><Search className="h-4 w-4" /> New search</Link>
+          <Link to={searchLink}><Search className="h-4 w-4" /> {isSubscribed ? 'New search' : 'Upgrade to search'}</Link>
         </Button>
       </div>
+
+      {!isSubscribed && (
+        <Card className="border-cyan-300/25 bg-cyan-300/[0.06]">
+          <CardContent className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div>
+              <p className="text-sm font-semibold text-cyan-100">Demo dashboard</p>
+              <p className="mt-1 text-sm text-slate-400">Upgrade to unlock real business leads. Search, CSV exports, lead unlocking, saved leads, and CRM actions are disabled until your subscription is active.</p>
+            </div>
+            <Button asChild>
+              <Link to="/pricing">Choose a plan</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
@@ -50,8 +65,8 @@ export function DashboardPage() {
 
       <Card>
         <CardContent className="flex flex-col gap-3 lg:flex-row">
-          <Input placeholder="Quick search: plumbers in Tampa, FL" />
-          <Button asChild className="lg:w-44"><Link to="/app/search">Search leads</Link></Button>
+          <Input placeholder={isSubscribed ? 'Quick search: plumbers in Tampa, FL' : 'Demo only: upgrade to run live Google Places searches'} disabled={!isSubscribed} />
+          <Button asChild className="lg:w-44"><Link to={searchLink}>{isSubscribed ? 'Search leads' : 'Upgrade'}</Link></Button>
         </CardContent>
       </Card>
 
@@ -63,7 +78,7 @@ export function DashboardPage() {
           <CardContent className="space-y-4">
             {searchHistory.length === 0 ? (
               <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.025] p-6 text-sm text-slate-400">
-                No searches yet. Your launch activity will appear here after your first search.
+                {isSubscribed ? 'No searches yet. Your launch activity will appear here after your first search.' : 'Sample search history is hidden in demo mode. Upgrade to unlock real business leads.'}
               </div>
             ) : (
               searchHistory.map((search) => (
