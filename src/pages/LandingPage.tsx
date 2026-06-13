@@ -11,6 +11,7 @@ import { plans, getFoundingRemainingSpots } from '../lib/plans'
 import { demoLeads } from '../lib/mockData'
 import type { PlanKey } from '../lib/types'
 import { getFoundingStatus } from '../lib/api'
+import { useAuth } from '../providers/AuthProvider'
 
 const benefits = [
   { icon: MapPin, title: 'Find local businesses', copy: 'Search by industry, keyword, city, state, and radius using the official Google Places API.' },
@@ -22,6 +23,7 @@ const benefits = [
 
 export function LandingPage() {
   const [foundingRemaining, setFoundingRemaining] = useState(getFoundingRemainingSpots())
+  const { user, loading } = useAuth()
 
   useEffect(() => {
     getFoundingStatus()
@@ -46,8 +48,8 @@ export function LandingPage() {
                 Discover businesses by industry and location, identify prospects without strong web presence, and turn them into an organized outreach pipeline.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg">
-                  <Link to="/signup">Get Started <ArrowRight className="h-4 w-4" /></Link>
+                <Button asChild size="lg" disabled={loading}>
+                  <Link to={user ? '/app' : '/signup'}>{user ? 'Go to Dashboard' : 'Get Started'} <ArrowRight className="h-4 w-4" /></Link>
                 </Button>
                 <Button asChild size="lg" variant="secondary">
                   <Link to="/pricing">View Pricing</Link>

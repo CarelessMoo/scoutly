@@ -15,7 +15,7 @@ type AuthContextValue = {
   isAdmin: boolean
   isSubscribed: boolean
   refreshSubscription: () => Promise<boolean>
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string) => Promise<boolean>
   signUp: (email: string, password: string, fullName: string) => Promise<void>
   resetPassword: (email: string) => Promise<void>
   updatePassword: (password: string) => Promise<void>
@@ -25,6 +25,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 const isLocalDemoMode = import.meta.env.DEV && !hasSupabaseConfig
+const activeSubscriptionStatuses = ['active', 'trialing']
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -36,12 +37,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [fullName, setFullName] = useState<string | null>(null)
   const [onboardingCompleted, setOnboardingCompleted] = useState(isLocalDemoMode)
 
-  const refreshSubscription = useCallback(async () => {
+  const clearAccountState = useCallback(() => {
+    setPlan(null)
+    setSubscriptionStatus('inactive')
+    setRemainingCredits(0)
+    setFullName(null)
+    setOnboardingCompleted(false)
+  }, [])
+
+  const loadAccountState = useCallback(async (accountUser: User | null) => {
     if (isLocalDemoMode) return true
-    if (!supabase || !user) {
-      setPlan(null)
-      setSubscriptionStatus('inactive')
-      setRemainingCredits(0)
+    if (!supabase || !accountUser) {
+      clearAccountState()
       return false
     }
 
@@ -50,19 +57,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, onboarding_completed')
-        .eq('id', user.id)
+        .eq('id', accountUser.id)
         .maybeSingle()
 
       const { data: subscription } = await supabase
         .from('subscriptions')
         .select('plan, status')
-        .eq('user_id', user.id)
+        .eq('user_id', accountUser.id)
         .maybeSingle()
 
       const { data: credits } = await supabase
         .from('usage_credits')
         .select('remaining_credits')
-        .eq('user_id', user.id)
+        .eq('user_id', accountUser.id)
         .maybeSingle()
 
       setFullName(profile?.full_name ?? null)
@@ -70,11 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPlan((subscription?.plan as PlanKey | null) ?? null)
       setSubscriptionStatus((subscription?.status as SubscriptionStatus | null) ?? 'inactive')
       setRemainingCredits(credits?.remaining_credits ?? 0)
-      return subscription?.status === 'active' || subscription?.status === 'trialing'
+      return activeSubscriptionStatuses.includes(subscription?.status ?? '')
     } finally {
       setSubscriptionLoading(false)
     }
-  }, [user])
+  }, [clearAccountState])
+
+  const refreshSubscription = useCallback(async () => loadAccountState(user), [loadAccountState, user])
 
   useEffect(() => {
     if (isLocalDemoMode) {
@@ -89,21 +98,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user)
-      setLoading(false)
+    const client = supabase
+    let mounted = true
+
+    async function restoreSession() {
+      const { data: sessionData } = await client.auth.getSession()
+      const sessionUser = sessionData.session?.user ?? null
+      if (!mounted) return
+
+      setUser(sessionUser)
+      await loadAccountState(sessionUser)
+      if (mounted) setLoading(false)
+    }
+
+    restoreSession()
+
+    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
+      const sessionUser = session?.user ?? null
+      setUser(sessionUser)
+      if (!sessionUser) {
+        clearAccountState()
+        setLoading(false)
+        return
+      }
+      loadAccountState(sessionUser)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => listener.subscription.unsubscribe()
-  }, [])
-
-  useEffect(() => {
-    refreshSubscription()
-  }, [refreshSubscription])
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
+  }, [clearAccountState, loadAccountState])
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -123,11 +148,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           window.localStorage.setItem('scoutly_demo_email', email)
           setUser({ id: 'demo-user', email } as User)
           setSubscriptionStatus('active')
-          return
+          return true
         }
         if (!supabase) throw new Error('Supabase is not configured for this deployment.')
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        setUser(data.user)
+        return loadAccountState(data.user)
       },
       signUp: async (email, password, fullName) => {
         if (isLocalDemoMode) {
@@ -149,6 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw error
         if (data.user) {
           await supabase.from('profiles').upsert({ id: data.user.id, email, full_name: fullName })
+          setUser(data.user)
+          await loadAccountState(data.user)
         }
       },
       resetPassword: async (email) => {
@@ -185,9 +214,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (supabase) await supabase.auth.signOut()
         window.localStorage.removeItem('scoutly_demo_email')
         setUser(null)
+        clearAccountState()
       },
     }),
-    [fullName, loading, onboardingCompleted, plan, refreshSubscription, remainingCredits, subscriptionLoading, subscriptionStatus, user],
+    [clearAccountState, fullName, loadAccountState, loading, onboardingCompleted, plan, refreshSubscription, remainingCredits, subscriptionLoading, subscriptionStatus, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

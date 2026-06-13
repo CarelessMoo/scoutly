@@ -13,7 +13,7 @@ import { useAuth } from '../providers/AuthProvider'
 
 export function PricingPage() {
   const { toast } = useToast()
-  const { user, isSubscribed } = useAuth()
+  const { user, loading, isSubscribed } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [foundingRemaining, setFoundingRemaining] = useState(getFoundingRemainingSpots())
@@ -23,6 +23,20 @@ export function PricingPage() {
       .then((status) => setFoundingRemaining(status.remaining))
       .catch(() => setFoundingRemaining(getFoundingRemainingSpots()))
   }, [])
+
+  if (loading) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-slate-950 px-4 text-slate-100">
+        <Card className="page-enter w-full max-w-md text-center">
+          <CardContent>
+            <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-cyan-300 border-t-transparent" />
+            <h1 className="text-xl font-semibold text-white">Restoring your Scoutly session</h1>
+            <p className="mt-2 text-sm text-slate-400">Checking whether your subscription is already active.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (isSubscribed) return <Navigate to="/app" replace />
 

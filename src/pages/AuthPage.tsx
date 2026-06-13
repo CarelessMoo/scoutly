@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
@@ -20,13 +20,18 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [validation, setValidation] = useState('')
-  const { signIn, signUp, resetPassword, updatePassword, refreshSubscription } = useAuth()
+  const { user, loading: authLoading, isSubscribed, signIn, signUp, resetPassword, updatePassword } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
 
   const isSignup = mode === 'signup'
   const isForgot = mode === 'forgot'
   const isReset = mode === 'reset'
+
+  useEffect(() => {
+    if (authLoading || !user || isReset) return
+    navigate(isSubscribed ? '/app' : '/pricing?notice=subscription-required', { replace: true })
+  }, [authLoading, isReset, isSubscribed, navigate, user])
 
   const passwordScore = useMemo(() => {
     let score = 0
@@ -72,8 +77,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       }
 
       if (mode === 'login') {
-        await signIn(email, password)
-        const active = await refreshSubscription()
+        const active = await signIn(email, password)
         navigate(active ? '/app' : '/pricing?notice=subscription-required')
       } else {
         await signUp(email, password, fullName)
@@ -89,6 +93,15 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <div className="grid min-h-screen place-items-center bg-slate-950 px-4 py-10 text-slate-100">
+      {authLoading ? (
+        <Card className="page-enter w-full max-w-md text-center">
+          <CardContent>
+            <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-cyan-300 border-t-transparent" />
+            <h1 className="text-xl font-semibold text-white">Restoring your Scoutly session</h1>
+            <p className="mt-2 text-sm text-slate-400">Checking your saved login before continuing.</p>
+          </CardContent>
+        </Card>
+      ) : (
       <Card className="page-enter w-full max-w-md">
         <CardHeader>
           <Link to="/" className="mb-6 flex items-center gap-3">
@@ -171,6 +184,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

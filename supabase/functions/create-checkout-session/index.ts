@@ -15,11 +15,17 @@ const priceEnvByPlan = {
   agency: 'STRIPE_AGENCY_PRICE_ID',
 } as const
 
+function requiredSecret(name: string) {
+  const value = Deno.env.get(name)?.trim()
+  if (!value) throw new Error(`${name} is not configured`)
+  return value
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse()
 
   try {
-    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2025-10-29.clover' })
+    const stripe = new Stripe(requiredSecret('STRIPE_SECRET_KEY'), { apiVersion: '2025-10-29.clover' })
     const user = await getUser(req)
     const { plan } = await req.json()
     if (!(plan in planConfig)) throw new Error('Invalid plan')
@@ -52,12 +58,15 @@ Deno.serve(async (req) => {
       monthly_search_limit: planConfig[plan as keyof typeof planConfig].monthlySearchLimit,
     }, { onConflict: 'user_id' })
 
+    const priceId = requiredSecret(priceEnvByPlan[plan as keyof typeof priceEnvByPlan])
+    const appUrl = requiredSecret('APP_URL').replace(/\/$/, '')
+
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price: Deno.env.get(priceEnvByPlan[plan as keyof typeof priceEnvByPlan])!, quantity: 1 }],
-      success_url: `${Deno.env.get('APP_URL')}/app?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${Deno.env.get('APP_URL')}/pricing?checkout=cancelled`,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${appUrl}/app?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appUrl}/pricing?checkout=cancelled`,
       metadata: { user_id: user.id, plan },
       subscription_data: { metadata: { user_id: user.id, plan } },
     })
