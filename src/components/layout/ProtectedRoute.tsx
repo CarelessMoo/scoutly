@@ -3,13 +3,16 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { Skeleton } from '../ui/skeleton'
 import { useAuth } from '../../providers/AuthProvider'
 import { Card, CardContent } from '../ui/card'
+import { confirmCheckoutSession } from '../../lib/api'
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { loading, user, isSubscribed, refreshSubscription } = useAuth()
+  const { loading, user, isSubscribed, onboardingCompleted, refreshSubscription } = useAuth()
   const location = useLocation()
   const [checkoutPolling, setCheckoutPolling] = useState(false)
   const [checkoutTimedOut, setCheckoutTimedOut] = useState(false)
-  const isReturningFromCheckout = new URLSearchParams(location.search).get('checkout') === 'success'
+  const params = new URLSearchParams(location.search)
+  const isReturningFromCheckout = params.get('checkout') === 'success'
+  const checkoutSessionId = params.get('session_id')
 
   useEffect(() => {
     if (!user || !isReturningFromCheckout || isSubscribed) return
@@ -19,6 +22,19 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     setCheckoutTimedOut(false)
 
     async function pollSubscription() {
+      if (checkoutSessionId) {
+        try {
+          const confirmation = await confirmCheckoutSession(checkoutSessionId)
+          if (confirmation.active) {
+            await refreshSubscription()
+            setCheckoutPolling(false)
+            return
+          }
+        } catch {
+          // Fall back to webhook polling below.
+        }
+      }
+
       for (let attempt = 0; attempt < 12; attempt += 1) {
         const active = await refreshSubscription()
         if (cancelled || active) {
@@ -39,7 +55,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [isReturningFromCheckout, isSubscribed, refreshSubscription, user])
+  }, [checkoutSessionId, isReturningFromCheckout, isSubscribed, refreshSubscription, user])
 
   if (loading) {
     return (
@@ -64,7 +80,8 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
       </div>
     )
   }
-  if (!isSubscribed && location.pathname !== '/pricing') return <Navigate to="/pricing" replace />
+  if (!isSubscribed && location.pathname !== '/app') return <Navigate to="/pricing?notice=subscription-required" replace />
+  if (isSubscribed && !onboardingCompleted && location.pathname !== '/app/onboarding') return <Navigate to="/app/onboarding" replace />
 
   return children
 }

@@ -15,7 +15,7 @@ export function MarketingNav() {
           <Link to="/login" className="hover:text-white">Login</Link>
         </nav>
         <Button asChild size="sm">
-          <Link to="/signup">Get Access</Link>
+          <Link to="/signup">Get Started</Link>
         </Button>
       </div>
     </header>

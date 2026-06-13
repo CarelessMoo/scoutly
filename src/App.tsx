@@ -23,6 +23,8 @@ export default function App() {
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/login" element={<AuthPage mode="login" />} />
       <Route path="/signup" element={<AuthPage mode="signup" />} />
+      <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
+      <Route path="/reset-password" element={<AuthPage mode="reset" />} />
       <Route path="/terms" element={<LegalPage type="terms" />} />
       <Route path="/privacy" element={<LegalPage type="privacy" />} />
       <Route path="/refunds" element={<LegalPage type="refunds" />} />

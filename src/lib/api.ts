@@ -60,3 +60,20 @@ export async function getFoundingStatus() {
   if (!response.ok) throw new Error('Unable to load founding member availability.')
   return response.json() as Promise<{ claimed: number; max: number; remaining: number; soldOut: boolean }>
 }
+
+export async function confirmCheckoutSession(sessionId: string) {
+  const token = await getAuthToken()
+  const response = await fetch(`${functionsBaseUrl}/confirm-checkout-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ sessionId }),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    throw new Error(data?.error ?? 'Unable to confirm checkout.')
+  }
+  return response.json() as Promise<{ active: boolean }>
+}
