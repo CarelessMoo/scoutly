@@ -17,18 +17,24 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+const isLocalDemoMode = import.meta.env.DEV && !hasSupabaseConfig
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [plan, setPlan] = useState<PlanKey | null>('founding')
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('active')
-  const [remainingCredits, setRemainingCredits] = useState(2000)
+  const [plan, setPlan] = useState<PlanKey | null>(isLocalDemoMode ? 'founding' : null)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>(isLocalDemoMode ? 'active' : 'inactive')
+  const [remainingCredits, setRemainingCredits] = useState(isLocalDemoMode ? 2000 : 0)
 
   useEffect(() => {
-    if (!supabase) {
+    if (isLocalDemoMode) {
       const demoEmail = window.localStorage.getItem('scoutly_demo_email')
       if (demoEmail) setUser({ id: 'demo-user', email: demoEmail } as User)
+      setLoading(false)
+      return
+    }
+
+    if (!supabase) {
       setLoading(false)
       return
     }
@@ -79,22 +85,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: Boolean(user?.email?.includes('admin')),
       isSubscribed: subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
       signIn: async (email, password) => {
-        if (!supabase) {
+        if (isLocalDemoMode) {
           window.localStorage.setItem('scoutly_demo_email', email)
           setUser({ id: 'demo-user', email } as User)
           setSubscriptionStatus('active')
           return
         }
+        if (!supabase) throw new Error('Supabase is not configured for this deployment.')
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       },
       signUp: async (email, password) => {
-        if (!supabase) {
+        if (isLocalDemoMode) {
           window.localStorage.setItem('scoutly_demo_email', email)
           setUser({ id: 'demo-user', email } as User)
           setSubscriptionStatus('active')
           return
         }
+        if (!supabase) throw new Error('Supabase is not configured for this deployment.')
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
       },
