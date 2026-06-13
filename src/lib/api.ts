@@ -1,7 +1,9 @@
 import { supabase } from './supabase'
 import type { PlanKey } from './types'
 
-const functionsBaseUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL ?? '/functions/v1'
+const functionsBaseUrl =
+  import.meta.env.VITE_SUPABASE_FUNCTIONS_URL ??
+  'https://hzesigjnerfviumzkeze.supabase.co/functions/v1'
 
 async function getAuthToken() {
   if (!supabase) return null
