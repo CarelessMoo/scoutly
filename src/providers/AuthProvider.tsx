@@ -6,11 +6,13 @@ import type { PlanKey, SubscriptionStatus } from '../lib/types'
 type AuthContextValue = {
   user: User | null
   loading: boolean
+  subscriptionLoading: boolean
   plan: PlanKey | null
   subscriptionStatus: SubscriptionStatus
   remainingCredits: number
   isAdmin: boolean
   isSubscribed: boolean
+  refreshSubscription: () => Promise<boolean>
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -25,6 +27,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<PlanKey | null>(isLocalDemoMode ? 'founding' : null)
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>(isLocalDemoMode ? 'active' : 'inactive')
   const [remainingCredits, setRemainingCredits] = useState(isLocalDemoMode ? 2000 : 0)
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
+
+  async function refreshSubscription() {
+    if (isLocalDemoMode) return true
+    if (!supabase || !user) {
+      setPlan(null)
+      setSubscriptionStatus('inactive')
+      setRemainingCredits(0)
+      return false
+    }
+
+    setSubscriptionLoading(true)
+    try {
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('plan, status')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      const { data: credits } = await supabase
+        .from('usage_credits')
+        .select('remaining_credits')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      setPlan((subscription?.plan as PlanKey | null) ?? null)
+      setSubscriptionStatus((subscription?.status as SubscriptionStatus | null) ?? 'inactive')
+      setRemainingCredits(credits?.remaining_credits ?? 0)
+      return subscription?.status === 'active' || subscription?.status === 'trialing'
+    } finally {
+      setSubscriptionLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (isLocalDemoMode) {
@@ -52,38 +87,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    async function loadSubscription() {
-      if (!supabase || !user) return
-
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('plan, status')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      const { data: credits } = await supabase
-        .from('usage_credits')
-        .select('remaining_credits')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      setPlan((subscription?.plan as PlanKey | null) ?? null)
-      setSubscriptionStatus((subscription?.status as SubscriptionStatus | null) ?? 'inactive')
-      setRemainingCredits(credits?.remaining_credits ?? 0)
-    }
-
-    loadSubscription()
+    refreshSubscription()
   }, [user])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       loading,
+      subscriptionLoading,
       plan,
       subscriptionStatus,
       remainingCredits,
       isAdmin: Boolean(user?.email?.includes('admin')),
       isSubscribed: subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
+      refreshSubscription,
       signIn: async (email, password) => {
         if (isLocalDemoMode) {
           window.localStorage.setItem('scoutly_demo_email', email)
@@ -118,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null)
       },
     }),
-    [loading, plan, remainingCredits, subscriptionStatus, user],
+    [loading, plan, remainingCredits, subscriptionLoading, subscriptionStatus, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

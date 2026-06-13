@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: Deno.env.get(priceEnvByPlan[plan as keyof typeof priceEnvByPlan])!, quantity: 1 }],
-      success_url: `${Deno.env.get('APP_URL')}/app?checkout=success`,
+      success_url: `${Deno.env.get('APP_URL')}/app?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${Deno.env.get('APP_URL')}/pricing?checkout=cancelled`,
       metadata: { user_id: user.id, plan },
       subscription_data: { metadata: { user_id: user.id, plan } },

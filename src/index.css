@@ -29,6 +29,18 @@ body {
     #020617;
 }
 
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(circle at 18% 12%, rgba(103, 232, 249, 0.09), transparent 24rem),
+    radial-gradient(circle at 82% 0%, rgba(14, 165, 233, 0.08), transparent 26rem);
+  animation: ambient-drift 16s ease-in-out infinite alternate;
+}
+
 button,
 input,
 textarea,
@@ -38,4 +50,41 @@ select {
 
 ::selection {
   background: rgba(103, 232, 249, 0.28);
+}
+
+.page-enter {
+  animation: page-enter 420ms ease-out both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ambient-drift {
+  from {
+    opacity: 0.72;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, -12px, 0) scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

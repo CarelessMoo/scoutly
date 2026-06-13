@@ -90,7 +90,7 @@ export function AppShell() {
       </header>
 
       <main className="lg:pl-72">
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="page-enter mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <Outlet />
         </div>
       </main>
