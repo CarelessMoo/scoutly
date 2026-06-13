@@ -15,6 +15,7 @@ type AuthContextValue = {
   isAdmin: boolean
   isSubscribed: boolean
   hasLoadedAccount: boolean
+  subscriptionFound: boolean
   refreshSubscription: () => Promise<boolean>
   signIn: (email: string, password: string) => Promise<boolean>
   signUp: (email: string, password: string, fullName: string) => Promise<void>
@@ -27,6 +28,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null)
 const isLocalDemoMode = import.meta.env.DEV && !hasSupabaseConfig
 const activeSubscriptionStatuses = ['active', 'trialing']
+type LoadAccountOptions = { blocking?: boolean }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [remainingCredits, setRemainingCredits] = useState(isLocalDemoMode ? 2000 : 0)
   const [subscriptionLoading, setSubscriptionLoading] = useState(false)
   const [hasLoadedAccount, setHasLoadedAccount] = useState(isLocalDemoMode)
+  const [subscriptionFound, setSubscriptionFound] = useState(isLocalDemoMode)
   const [fullName, setFullName] = useState<string | null>(null)
   const [onboardingCompleted, setOnboardingCompleted] = useState(isLocalDemoMode)
 
@@ -46,11 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setFullName(null)
     setOnboardingCompleted(false)
     setHasLoadedAccount(true)
+    setSubscriptionFound(false)
   }, [])
 
-  const loadAccountState = useCallback(async (accountUser: User | null) => {
+  const loadAccountState = useCallback(async (accountUser: User | null, options: LoadAccountOptions = {}) => {
+    const blocking = options.blocking ?? false
     if (isLocalDemoMode) {
       setHasLoadedAccount(true)
+      setSubscriptionFound(true)
       return true
     }
     if (!supabase || !accountUser) {
@@ -58,8 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false
     }
 
-    setSubscriptionLoading(true)
-    setHasLoadedAccount(false)
+    if (blocking) {
+      setSubscriptionLoading(true)
+      setHasLoadedAccount(false)
+    }
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -84,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPlan((subscription?.plan as PlanKey | null) ?? null)
       setSubscriptionStatus((subscription?.status as SubscriptionStatus | null) ?? 'inactive')
       setRemainingCredits(credits?.remaining_credits ?? 0)
+      setSubscriptionFound(Boolean(subscription))
       setHasLoadedAccount(true)
       if (import.meta.env.DEV) {
         console.info('[Scoutly auth] Subscription status checked on login/refresh', {
@@ -94,11 +103,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return activeSubscriptionStatuses.includes(subscription?.status ?? '')
     } finally {
-      setSubscriptionLoading(false)
+      if (blocking) setSubscriptionLoading(false)
     }
   }, [clearAccountState])
 
-  const refreshSubscription = useCallback(async () => loadAccountState(user), [loadAccountState, user])
+  const refreshSubscription = useCallback(async () => loadAccountState(user, { blocking: false }), [loadAccountState, user])
 
   useEffect(() => {
     if (isLocalDemoMode) {
@@ -122,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return
 
       setUser(sessionUser)
-      await loadAccountState(sessionUser)
+      await loadAccountState(sessionUser, { blocking: true })
       if (mounted) setLoading(false)
     }
 
@@ -136,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
         return
       }
-      loadAccountState(sessionUser)
+      loadAccountState(sessionUser, { blocking: false })
     })
 
     return () => {
@@ -158,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: Boolean(user?.email?.includes('admin')),
       isSubscribed: subscriptionStatus === 'active' || subscriptionStatus === 'trialing',
       hasLoadedAccount,
+      subscriptionFound,
       refreshSubscription,
       signIn: async (email, password) => {
         if (isLocalDemoMode) {
@@ -170,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         setUser(data.user)
-        return loadAccountState(data.user)
+        return loadAccountState(data.user, { blocking: true })
       },
       signUp: async (email, password, fullName) => {
         if (isLocalDemoMode) {
@@ -193,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.user) {
           await supabase.from('profiles').upsert({ id: data.user.id, email, full_name: fullName })
           setUser(data.user)
-          await loadAccountState(data.user)
+          await loadAccountState(data.user, { blocking: true })
         }
       },
       resetPassword: async (email) => {
@@ -233,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearAccountState()
       },
     }),
-    [clearAccountState, fullName, hasLoadedAccount, loadAccountState, loading, onboardingCompleted, plan, refreshSubscription, remainingCredits, subscriptionLoading, subscriptionStatus, user],
+    [clearAccountState, fullName, hasLoadedAccount, loadAccountState, loading, onboardingCompleted, plan, refreshSubscription, remainingCredits, subscriptionFound, subscriptionLoading, subscriptionStatus, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -9,7 +9,7 @@ import { useAuth } from '../providers/AuthProvider'
 import { useToast } from '../providers/ToastProvider'
 
 export function BillingPage() {
-  const { plan, subscriptionStatus, remainingCredits } = useAuth()
+  const { plan, subscriptionStatus, remainingCredits, isSubscribed } = useAuth()
   const { toast } = useToast()
   const activePlan = plan ? plans[plan] : null
 
@@ -52,7 +52,18 @@ export function BillingPage() {
                 Your $19/month Founding Member pricing is permanently grandfathered. Confirm any plan change before continuing in Stripe.
               </div>
             )}
-            <Button className="mt-6" onClick={openPortal}><CreditCard className="h-4 w-4" /> Manage billing</Button>
+            {!isSubscribed && (
+              <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/10 p-3 text-sm text-cyan-100">
+                Choose a plan to unlock Scoutly. Billing stays available here so you can activate or fix your subscription.
+              </div>
+            )}
+            <div className="mt-6 flex flex-wrap gap-3">
+              {isSubscribed ? (
+                <Button onClick={openPortal}><CreditCard className="h-4 w-4" /> Manage billing</Button>
+              ) : (
+                <Button asChild><Link to="/pricing">Choose a plan</Link></Button>
+              )}
+            </div>
           </CardContent>
         </Card>
         <Card>

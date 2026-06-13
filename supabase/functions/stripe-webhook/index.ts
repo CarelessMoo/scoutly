@@ -46,6 +46,7 @@ async function saveSubscription(args: {
   fallbackPlan?: string | null
   fallbackPriceId?: string | null
   forceStatus?: string | null
+  resetCredits?: boolean
 }) {
   const supabase = serviceClient()
   const subscription = args.subscription as Stripe.Subscription & {
@@ -63,16 +64,27 @@ async function saveSubscription(args: {
 
   const { data: existingSubscription } = await supabase
     .from('subscriptions')
-    .select('plan')
+    .select('plan, status, current_period_end, credits_remaining')
     .or(`user_id.eq.${userId},stripe_subscription_id.eq.${subscription.id}`)
+    .maybeSingle()
+
+  const { data: existingCredits } = await supabase
+    .from('usage_credits')
+    .select('remaining_credits')
+    .eq('user_id', userId)
     .maybeSingle()
 
   const plan = existingSubscription?.plan === 'founding' ? 'founding' : incomingPlan
   const config = planConfig[plan]
   const status = args.forceStatus ?? subscription.status
   const isPaid = status === 'active' || status === 'trialing'
-  const allocatedCredits = isPaid ? config.credits : 0
   const periodEnd = timestampToIso(subscription.current_period_end)
+  const periodChanged = Boolean(periodEnd && existingSubscription?.current_period_end !== periodEnd)
+  const wasInactive = !existingSubscription || !['active', 'trialing'].includes(existingSubscription.status ?? '')
+  const shouldResetCredits = isPaid && (args.resetCredits || periodChanged || wasInactive)
+  const allocatedCredits = isPaid ? config.credits : 0
+  const existingRemainingCredits = existingCredits?.remaining_credits ?? existingSubscription?.credits_remaining ?? allocatedCredits
+  const remainingCredits = shouldResetCredits ? allocatedCredits : Math.min(existingRemainingCredits, allocatedCredits)
 
   const { data, error } = await supabase.from('subscriptions').upsert({
     user_id: userId,
@@ -84,7 +96,7 @@ async function saveSubscription(args: {
     status,
     monthly_lead_credits: allocatedCredits,
     credits_allocated: allocatedCredits,
-    credits_remaining: allocatedCredits,
+    credits_remaining: isPaid ? remainingCredits : 0,
     daily_search_limit: config.dailySearchLimit,
     monthly_search_limit: config.monthlySearchLimit,
     current_period_start: timestampToIso(subscription.current_period_start),
@@ -98,7 +110,7 @@ async function saveSubscription(args: {
     user_id: userId,
     subscription_id: data?.id,
     monthly_credits: allocatedCredits,
-    remaining_credits: allocatedCredits,
+    remaining_credits: isPaid ? remainingCredits : 0,
     reset_at: periodEnd ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
@@ -127,6 +139,7 @@ Deno.serve(async (req) => {
         fallbackPlan: session.metadata?.plan,
         fallbackPriceId: session.metadata?.price_id,
         forceStatus: 'active',
+        resetCredits: true,
       })
     }
 
@@ -148,6 +161,7 @@ Deno.serve(async (req) => {
           stripe,
           subscription,
           forceStatus: event.type === 'invoice.payment_failed' ? 'past_due' : null,
+          resetCredits: event.type === 'invoice.payment_succeeded',
         })
       }
     }

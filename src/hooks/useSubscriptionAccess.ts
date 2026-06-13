@@ -9,7 +9,7 @@ export function useSubscriptionAccess(pathname: string) {
   return useMemo(() => {
     const isBilling = pathname === billingPath
     const isOnboarding = pathname === '/app/onboarding'
-    const isChecking = auth.loading || auth.subscriptionLoading || !auth.hasLoadedAccount
+    const isChecking = auth.loading || !auth.hasLoadedAccount
 
     if (isChecking) {
       return { ...auth, decision: 'loading' as const, isBilling, isOnboarding }

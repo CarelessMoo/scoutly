@@ -49,7 +49,13 @@ Deno.serve(async (req) => {
 
     const { data: existingSubscription } = await supabase
       .from('subscriptions')
-      .select('plan')
+      .select('plan, status, current_period_end, credits_remaining')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    const { data: existingCredits } = await supabase
+      .from('usage_credits')
+      .select('remaining_credits')
       .eq('user_id', user.id)
       .maybeSingle()
 
@@ -59,6 +65,11 @@ Deno.serve(async (req) => {
     const allocatedCredits = isPaid ? config.credits : 0
     const priceId = session.metadata?.price_id ?? subscription.items.data[0]?.price?.id ?? null
     const periodEnd = timestampToIso(subscription.current_period_end)
+    const periodChanged = Boolean(periodEnd && existingSubscription?.current_period_end !== periodEnd)
+    const wasInactive = !existingSubscription || !['active', 'trialing'].includes(existingSubscription.status ?? '')
+    const shouldResetCredits = isPaid && (periodChanged || wasInactive)
+    const existingRemainingCredits = existingCredits?.remaining_credits ?? existingSubscription?.credits_remaining ?? allocatedCredits
+    const remainingCredits = shouldResetCredits ? allocatedCredits : Math.min(existingRemainingCredits, allocatedCredits)
 
     const { data, error } = await supabase.from('subscriptions').upsert({
       user_id: user.id,
@@ -70,7 +81,7 @@ Deno.serve(async (req) => {
       status: subscription.status,
       monthly_lead_credits: allocatedCredits,
       credits_allocated: allocatedCredits,
-      credits_remaining: allocatedCredits,
+      credits_remaining: isPaid ? remainingCredits : 0,
       daily_search_limit: config.dailySearchLimit,
       monthly_search_limit: config.monthlySearchLimit,
       current_period_start: timestampToIso(subscription.current_period_start),
@@ -84,7 +95,7 @@ Deno.serve(async (req) => {
       user_id: user.id,
       subscription_id: data?.id,
       monthly_credits: allocatedCredits,
-      remaining_credits: allocatedCredits,
+      remaining_credits: isPaid ? remainingCredits : 0,
       reset_at: periodEnd ?? new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' })
